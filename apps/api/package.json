@@ -11,6 +11,10 @@
     "start": "node dist/main.js",
     "lint": "eslint . --max-warnings 0",
     "prisma:generate": "prisma generate",
+    "prisma:format": "prisma format",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrations": "prisma migrate status",
+    "db:seed": "npm run build && prisma db seed",
     "prisma:validate": "prisma validate",
     "db:check": "npm run build && node scripts/check-database.mjs",
     "test": "npm run build && node --test test/*.test.mjs"

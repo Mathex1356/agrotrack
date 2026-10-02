@@ -9,4 +9,217 @@ datasource db {
   provider = "postgresql"
 }
 
-// Sem modelos de domínio nesta tarefa. A conexão é validada com SELECT 1.
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+}
+
+enum OrganizationStatus {
+  PROVISIONING
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum SystemRoleCode {
+  OWNER
+  MANAGER
+  AGRONOMIST
+  WORKER
+}
+
+enum RoleStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum PermissionStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum PermissionScope {
+  ORGANIZATION
+  FARM
+}
+
+enum OrganizationMembershipStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+enum FarmStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum FarmMembershipStatus {
+  ACTIVE
+  REVOKED
+}
+
+model User {
+  id              String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  displayName     String
+  email           String
+  normalizedEmail String                   @unique
+  status          UserStatus               @default(ACTIVE)
+  createdAt       DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
+  memberships     OrganizationMembership[]
+}
+
+model Organization {
+  id            String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name          String
+  referenceCode String                   @unique
+  status        OrganizationStatus       @default(PROVISIONING)
+  createdAt     DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
+  roles         Role[]
+  memberships   OrganizationMembership[]
+  farms         Farm[]
+  invitations   Invitation[]
+}
+
+model Role {
+  id             String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String                   @db.Uuid
+  name           String
+  systemCode     SystemRoleCode?
+  status         RoleStatus               @default(ACTIVE)
+  createdAt      DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
+  organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  permissions    RolePermission[]
+  memberships    OrganizationMembership[]
+  invitations    Invitation[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, systemCode])
+  @@unique([organizationId, name])
+}
+
+model Permission {
+  code        String           @id
+  description String
+  scope       PermissionScope
+  status      PermissionStatus @default(ACTIVE)
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  organizationId String     @db.Uuid
+  roleId         String     @db.Uuid
+  permissionCode String
+  role           Role       @relation(fields: [organizationId, roleId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
+  permission     Permission @relation(fields: [permissionCode], references: [code], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([roleId, permissionCode])
+  @@index([organizationId, roleId])
+  @@index([permissionCode])
+}
+
+model OrganizationMembership {
+  id                  String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String                       @db.Uuid
+  userId              String                       @db.Uuid
+  roleId              String                       @db.Uuid
+  status              OrganizationMembershipStatus @default(ACTIVE)
+  joinedAt            DateTime                     @default(now()) @db.Timestamptz(3)
+  revokedAt           DateTime?                    @db.Timestamptz(3)
+  createdAt           DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime                     @default(now()) @updatedAt @db.Timestamptz(3)
+  organization        Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  user                User                         @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  role                Role                         @relation(fields: [organizationId, roleId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
+  farms               FarmMembership[]
+  sentInvitations     Invitation[]                 @relation("Inviter")
+  acceptedInvitations Invitation[]                 @relation("Acceptor")
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@index([organizationId, roleId, status])
+}
+
+model Farm {
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String           @db.Uuid
+  code             String
+  name             String
+  legalOwnerName   String?
+  locationText     String?
+  municipality     String
+  state            String
+  country          String
+  timezone         String
+  totalAreaHa      Decimal          @db.Decimal(18, 6)
+  productiveAreaHa Decimal          @db.Decimal(18, 6)
+  description      String?
+  status           FarmStatus       @default(ACTIVE)
+  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  memberships      FarmMembership[]
+  invitations      InvitationFarm[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+}
+
+model FarmMembership {
+  id                       String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId           String                 @db.Uuid
+  organizationMembershipId String                 @db.Uuid
+  farmId                   String                 @db.Uuid
+  status                   FarmMembershipStatus   @default(ACTIVE)
+  revokedAt                DateTime?              @db.Timestamptz(3)
+  createdAt                DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime               @default(now()) @updatedAt @db.Timestamptz(3)
+  membership               OrganizationMembership @relation(fields: [organizationId, organizationMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
+  farm                     Farm                   @relation(fields: [organizationId, farmId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([organizationId, organizationMembershipId, farmId], map: "FarmMembership_member_farm_key")
+  @@index([organizationId, farmId, status])
+}
+
+model Invitation {
+  id                   String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String                  @db.Uuid
+  normalizedEmail      String
+  roleId               String                  @db.Uuid
+  inviterMembershipId  String?                 @db.Uuid
+  tokenDigest          String                  @unique
+  expiresAt            DateTime                @db.Timestamptz(3)
+  acceptedAt           DateTime?               @db.Timestamptz(3)
+  revokedAt            DateTime?               @db.Timestamptz(3)
+  acceptedMembershipId String?                 @db.Uuid
+  createdAt            DateTime                @default(now()) @db.Timestamptz(3)
+  organization         Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  role                 Role                    @relation(fields: [organizationId, roleId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
+  inviter              OrganizationMembership? @relation("Inviter", fields: [organizationId, inviterMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
+  acceptedMembership   OrganizationMembership? @relation("Acceptor", fields: [organizationId, acceptedMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
+  farms                InvitationFarm[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, normalizedEmail])
+  @@index([organizationId, roleId])
+  @@index([organizationId, inviterMembershipId])
+  @@index([organizationId, acceptedMembershipId])
+  @@index([expiresAt])
+}
+
+model InvitationFarm {
+  organizationId String     @db.Uuid
+  invitationId   String     @db.Uuid
+  farmId         String     @db.Uuid
+  invitation     Invitation @relation(fields: [organizationId, invitationId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
+  farm           Farm       @relation(fields: [organizationId, farmId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([invitationId, farmId])
+  @@index([organizationId, invitationId])
+  @@index([organizationId, farmId])
+}

@@ -1,8 +1,8 @@
 ﻿# AgroTrack
 
-Monorepo npm workspaces — Sprint 0, Tarefas 01 e 02. A fundação contém frontend,
-API REST e infraestrutura local PostgreSQL/PostGIS integrada ao Prisma, sem
-entidades ou regras de negócio.
+Monorepo npm workspaces — Sprint 1, Tarefa 02. A fundação contém frontend,
+API REST, PostgreSQL/PostGIS e o núcleo físico de identidade, organizações,
+papéis, fazendas e convites. Ainda não há autenticação ou endpoints de negócio.
 
 ## Estrutura
 
@@ -10,15 +10,17 @@ entidades ou regras de negócio.
 apps/
   web/                         React + TypeScript + Vite
   api/
-    prisma/schema.prisma       Datasource e gerador, ainda sem modelos
+    prisma/schema.prisma       Dez modelos do núcleo multi-tenant
+    prisma/migrations/         Migrations SQL versionadas
+    prisma/seed.mjs            Catálogo global de permissões, sem dados demo
     prisma.config.ts           Configuração do CLI Prisma
     src/config/                Leitura e validação do ambiente
     src/prisma/                PrismaModule e PrismaService
     src/generated/prisma/      Client gerado, ignorado pelo Git
     scripts/check-database.mjs Verificação real via Prisma
-    test/                      Testes de configuração e health
+    test/                      Testes de configuração, health e integridade real
 packages/                      Reservado para pacotes compartilhados
-docs/                          Reservado para documentação
+docs/architecture/             Modelo conceitual aprovado e modelo físico
 docker/postgres/               Inicialização da extensão PostGIS
 compose.yaml                   Banco local e volume persistente
 ```
@@ -78,11 +80,13 @@ estão alinhados e fixados em 7.10.0; consulte o lockfile para as demais versõe
    npm run db:status
    ```
 
-5. Valide e gere o Client Prisma:
+5. Valide o schema, aplique a migration e prepare o catálogo global:
 
    ```sh
    npm run prisma:validate
+   npm run db:migrate
    npm run prisma:generate
+   npm run db:seed
    ```
 
 6. Confirme a conexão Prisma e a extensão PostGIS:
@@ -163,11 +167,12 @@ npm run db:up
 
 ## Prisma e NestJS
 
-O schema está em `apps/api/prisma/schema.prisma`, com datasource PostgreSQL e
-nenhum modelo. Não há migrations nesta tarefa e não é necessário executar
-`db push`, introspecção ou criar tabelas artificiais para verificar a conexão.
-A imagem cria objetos internos da extensão PostGIS; eles não são entidades do
-AgroTrack.
+O schema está em `apps/api/prisma/schema.prisma`. O [modelo físico da Sprint 1](docs/architecture/physical-model-sprint1.md)
+documenta as dez tabelas, FKs compostas, checks SQL e limites de enforcement.
+Use `npm run db:migrate` para aplicar migrations versionadas e `npm run db:migrations`
+para consultar o estado. Não substitua migrations por `db push`. O seed é explícito
+e idempotente: `npm run db:seed` prepara somente Permission. Não cria organizações,
+usuários ou fazendas. A imagem também cria objetos internos da extensão PostGIS.
 
 O Prisma 7 utiliza `prisma.config.ts` para a URL e `@prisma/adapter-pg` como
 driver. O NestJS injeta um único `PrismaService` exportado pelo `PrismaModule`.
@@ -186,6 +191,8 @@ Com `.env` configurado e banco iniciado:
 
 ```sh
 npm run prisma:validate
+npm run prisma:format
+npm run db:migrate
 npm run prisma:generate
 npm run build
 npm run lint
@@ -193,8 +200,10 @@ npm run test:api
 npm run db:check
 ```
 
-`test:api` cobre configuração inválida, espera pela consulta e resposta segura de
-falha; `db:check` valida a infraestrutura real. Os artefatos de build ficam em
+`test:api` cobre configuração, health e constraints reais no PostgreSQL migrado.
+Cada cenário de modelagem usa transação revertida, inclusive quando passa; não
+deixa usuários/fazendas demo e não usa truncate/reset. Execute somente no banco
+local de desenvolvimento. `db:check` valida a infraestrutura real. Os artefatos de build ficam em
 `apps/web/dist` e `apps/api/dist`. Para iniciar o build da API:
 
 ```sh
@@ -211,8 +220,8 @@ use `docker compose config --quiet`.
 
 O banco é exclusivo do desenvolvimento local, com acesso publicado somente em
 loopback; seu usuário inicial é administrativo e não deve ser reutilizado como
-usuário da aplicação em produção. Autenticação, autorização, entidades de
-negócio, migrations de domínio e configuração de produção permanecem fora desta
+usuário da aplicação em produção. Autenticação, enforcement de autorização,
+RLS, entidades agrícolas e configuração de produção permanecem fora desta
 entrega. O frontend mantém a página mínima AgroTrack e a stack da Tarefa 01.
 
 O `package.json` raiz contém overrides limitados ao Prisma 7.10.0 para

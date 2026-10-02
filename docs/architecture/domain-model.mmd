@@ -1,0 +1,283 @@
+erDiagram
+    direction TB
+
+    %% Sprint 1 Tarefa 01: proposta conceitual, sem implementacao fisica.
+    %% organizationId/farmId das entidades privadas exigem FKs compostas.
+    %% Nem todas as colunas e ligacoes de escopo foram repetidas neste panorama.
+    %% Cardinalidades condicionais e temporalidade: consultar domain-model.md.
+
+    User {
+        uuid id PK
+        string normalizedEmail UK
+        string status
+    }
+    Organization {
+        uuid id PK
+        string name
+        string status
+    }
+    OrganizationMembership {
+        uuid id PK
+        uuid organizationId FK
+        uuid userId FK
+        uuid roleId FK
+        string status
+    }
+    FarmMembership {
+        uuid id PK
+        uuid organizationId FK
+        uuid organizationMembershipId FK
+        uuid farmId FK
+        string status
+    }
+    Role {
+        uuid id PK
+        uuid organizationId FK
+        string systemCode "Opcional para papeis customizados futuros"
+        string name
+    }
+    Permission {
+        string code PK
+        string scope
+    }
+    RolePermission {
+        uuid organizationId FK
+        uuid roleId PK, FK
+        string permissionCode PK, FK
+    }
+    Invitation {
+        uuid id PK
+        uuid organizationId FK
+        uuid roleId FK
+        string tokenDigest UK
+        datetime expiresAt
+    }
+    InvitationFarm {
+        uuid organizationId FK
+        uuid invitationId PK, FK
+        uuid farmId PK, FK
+    }
+    Farm {
+        uuid id PK
+        uuid organizationId FK
+        string name
+        decimal totalAreaHa
+        decimal productiveAreaHa
+    }
+    Field {
+        uuid id PK
+        uuid organizationId FK
+        uuid farmId FK
+        string code
+        decimal areaHa
+        geometry boundary "MultiPolygon 4326 opcional"
+    }
+    Crop {
+        uuid id PK
+        uuid organizationId FK "Nulo somente para cultura global"
+        string scope
+        string name
+    }
+    Season {
+        uuid id PK
+        uuid organizationId FK
+        uuid farmId FK
+        string name
+        string status
+    }
+    Planting {
+        uuid id PK
+        uuid organizationId FK
+        uuid farmId FK
+        uuid fieldId FK
+        uuid seasonId FK
+        uuid cropId FK
+        decimal actualAreaHa
+        string status
+    }
+    Activity {
+        uuid id PK
+        uuid organizationId FK
+        uuid farmId FK
+        uuid fieldId FK "Opcional sem plantio"
+        uuid plantingId FK "Opcional"
+        string type
+        string status
+    }
+    ActivityInput {
+        uuid id PK
+        uuid activityId FK
+        uuid productId FK
+        string unitId FK
+        decimal plannedQuantity
+    }
+    ActivityMachine {
+        uuid id PK
+        uuid activityId FK
+        uuid machineId FK
+        decimal initialHourmeter
+        decimal finalHourmeter
+    }
+    Product {
+        uuid id PK
+        uuid organizationId FK
+        string code
+        string baseUnitId FK
+    }
+    Unit {
+        string code PK
+        string dimension
+    }
+    ProductUnitConversion {
+        uuid id PK
+        uuid organizationId FK
+        uuid productId FK
+        string fromUnitId FK
+        decimal factorToBase
+    }
+    InventoryItem {
+        uuid id PK
+        uuid organizationId FK
+        uuid farmId FK
+        uuid productId FK
+        decimal minimumQuantityBase
+    }
+    InventoryLot {
+        uuid id PK
+        uuid organizationId FK
+        uuid productId FK
+        string internalCode
+        date expiresAt "Extensao preparada"
+    }
+    InventoryMovement {
+        uuid id PK
+        uuid organizationId FK
+        uuid farmId FK
+        uuid inventoryItemId FK
+        string type
+        decimal deltaBase
+        datetime recordedAt
+    }
+    InventoryTransfer {
+        uuid id PK
+        uuid organizationId FK
+        uuid originFarmId FK
+        uuid destinationFarmId FK
+        string status
+    }
+    InventoryTransferLine {
+        uuid id PK
+        uuid transferId FK
+        uuid productId FK
+        uuid sourceInventoryItemId FK
+        uuid destinationInventoryItemId FK
+        decimal quantityBase
+    }
+    Machine {
+        uuid id PK
+        uuid organizationId FK
+        uuid farmId FK
+        string identification
+        string status
+    }
+    Harvest {
+        uuid id PK
+        uuid organizationId FK
+        uuid farmId FK
+        uuid plantingId FK
+        decimal harvestedAreaHa
+        decimal newlyHarvestedAreaHa
+        decimal netWeightKg
+    }
+    Alert {
+        uuid id PK
+        uuid organizationId FK
+        uuid farmId FK "Opcional apenas em assunto organizacional"
+        string category
+        string severity
+        string status
+    }
+    AuditLog {
+        uuid id PK
+        uuid organizationId FK
+        uuid farmId FK "Opcional apenas em assunto organizacional"
+        string actorType
+        string action
+        string entityType
+        uuid entityId "Referencia de evidencia sem FK universal"
+        datetime timestamp
+    }
+
+    %% Identidade, concessao de capacidades e escopo territorial separados.
+    User ||..o{ OrganizationMembership : participa
+    Organization ||..o{ OrganizationMembership : recebe
+    Organization ||..o{ Role : define
+    Role ||..o{ OrganizationMembership : qualifica
+    Role ||--o{ RolePermission : concede
+    Permission ||--o{ RolePermission : compoe
+    OrganizationMembership ||..o{ FarmMembership : possui
+    Farm ||..o{ FarmMembership : autoriza
+    Organization ||..o{ Invitation : oferece
+    Role ||..o{ Invitation : propoe
+    Invitation ||--o{ InvitationFarm : delimita
+    Farm ||..o{ InvitationFarm : integra
+    OrganizationMembership o|..o{ Invitation : aceita
+
+    %% Culturas globais ou privadas: vinculo Planting-Crop tem regra adicional.
+    Organization ||..o{ Farm : possui
+    Farm ||..o{ Field : divide
+    Farm ||..o{ Season : planeja
+    Organization o|..o{ Crop : personaliza
+    Unit o|..o{ Crop : sugere_colheita
+    Season ||..o{ Planting : agrupa
+    Field ||..o{ Planting : recebe
+    Crop ||..o{ Planting : caracteriza
+
+    %% fieldId obrigatorio quando Activity referencia Planting.
+    Farm ||..o{ Activity : organiza
+    Field o|..o{ Activity : localiza
+    Planting o|..o{ Activity : contextualiza
+    OrganizationMembership o|..o{ Activity : responde
+    Activity ||--o{ ActivityInput : planeja_insumos
+    Activity ||--o{ ActivityMachine : aloca
+    Machine ||..o{ ActivityMachine : participa
+    OrganizationMembership o|..o{ ActivityMachine : opera
+
+    %% Conta por fazenda e produto; saldo derivado dos movimentos imutaveis.
+    Organization ||..o{ Product : cadastra
+    Unit ||..o{ Product : define_base
+    Product ||--o{ ProductUnitConversion : especifica
+    Unit ||..o{ ProductUnitConversion : converte
+    Product ||..o{ ActivityInput : identifica
+    Unit ||..o{ ActivityInput : quantifica
+    Farm ||..o{ InventoryItem : mantem
+    Product ||..o{ InventoryItem : compoe
+    Product ||..o{ InventoryLot : rastreia
+    InventoryItem ||..o{ InventoryMovement : recebe
+    InventoryLot o|..o{ InventoryMovement : identifica_lote
+    Unit ||..o{ InventoryMovement : registra_entrada
+    ActivityInput o|..o{ InventoryMovement : origina
+    InventoryMovement o|..o{ InventoryMovement : compensa
+
+    %% Linha publicada exige exatamente dois movimentos; draft exige zero.
+    Organization ||..o{ InventoryTransfer : controla
+    Farm ||..o{ InventoryTransfer : envia
+    Farm ||..o{ InventoryTransfer : recebe
+    InventoryTransfer ||--o{ InventoryTransferLine : detalha
+    Product ||..o{ InventoryTransferLine : transfere
+    InventoryItem ||..o{ InventoryTransferLine : conta_origem
+    InventoryItem ||..o{ InventoryTransferLine : conta_destino
+    InventoryLot o|..o{ InventoryTransferLine : preserva_lote
+    InventoryTransferLine o|..o{ InventoryMovement : gera_par
+
+    %% Producao e supervisao preservam o escopo dos fatos originais.
+    Farm ||..o{ Machine : possui
+    Planting ||..o{ Harvest : produz
+    Activity o|..o{ Harvest : executa
+    Unit ||..o{ Harvest : quantifica
+    Harvest o|..o| Harvest : estorna_integralmente
+    Organization ||..o{ Alert : acompanha
+    Farm o|..o{ Alert : delimita
+    Organization ||..o{ AuditLog : preserva
+    Farm o|..o{ AuditLog : delimita
+    OrganizationMembership o|..o{ AuditLog : atua
