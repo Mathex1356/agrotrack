@@ -16,7 +16,23 @@
     "build": "npm run build --workspaces --if-present",
     "build:web": "npm run build --workspace=@agrotrack/web",
     "build:api": "npm run build --workspace=@agrotrack/api",
-    "lint": "npm run lint --workspaces --if-present"
+    "lint": "npm run lint --workspaces --if-present",
+    "db:up": "docker compose up -d --wait --wait-timeout 120 db",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f db",
+    "db:status": "docker compose ps",
+    "db:check": "npm run db:check --workspace=@agrotrack/api",
+    "prisma:generate": "npm run prisma:generate --workspace=@agrotrack/api",
+    "prisma:validate": "npm run prisma:validate --workspace=@agrotrack/api",
+    "test:api": "npm run test --workspace=@agrotrack/api"
+  },
+  "overrides": {
+    "@prisma/config@7.10.0": {
+      "deepmerge-ts": "8.0.2"
+    },
+    "prisma@7.10.0": {
+      "mysql2": "3.24.5"
+    }
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
