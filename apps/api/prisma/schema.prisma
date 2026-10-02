@@ -81,6 +81,7 @@ model Organization {
   memberships   OrganizationMembership[]
   farms         Farm[]
   invitations   Invitation[]
+  crops         Crop[]
 }
 
 model Role {
@@ -164,6 +165,8 @@ model Farm {
   organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   memberships      FarmMembership[]
   invitations      InvitationFarm[]
+  fields           Field[]
+  seasons          Season[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -222,4 +225,122 @@ model InvitationFarm {
   @@id([invitationId, farmId])
   @@index([organizationId, invitationId])
   @@index([organizationId, farmId])
+}
+
+enum FieldStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum CropScope {
+  GLOBAL
+  ORGANIZATION
+}
+
+enum CropStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum SeasonStatus {
+  PLANNED
+  IN_PROGRESS
+  FINISHED
+  CANCELLED
+}
+
+enum PlantingStatus {
+  PLANNED
+  IN_PROGRESS
+  FINISHED
+  CANCELLED
+}
+
+model Field {
+  id               String                                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String                                      @db.Uuid
+  farmId           String                                      @db.Uuid
+  code             String
+  name             String
+  areaHa           Decimal                                     @db.Decimal(18, 6)
+  soilType         String?
+  description      String?
+  notes            String?
+  status           FieldStatus                                 @default(ACTIVE)
+  boundary         Unsupported("geometry(MultiPolygon,4326)")?
+  geometryRevision Int                                         @default(0)
+  createdAt        DateTime                                    @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime                                    @default(now()) @updatedAt @db.Timestamptz(3)
+  farm             Farm                                        @relation(fields: [organizationId, farmId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
+  plantings        Planting[]
+
+  @@unique([organizationId, farmId, id])
+  @@unique([organizationId, farmId, code])
+  @@index([organizationId, farmId, status])
+}
+
+model Crop {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  scope          CropScope
+  organizationId String?       @db.Uuid
+  code           String
+  name           String
+  status         CropStatus    @default(ACTIVE)
+  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  plantings      Planting[]
+
+  // SQL adds a partial unique index for GLOBAL codes (organizationId IS NULL).
+  @@unique([organizationId, code])
+  @@index([scope, organizationId, status])
+}
+
+model Season {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String       @db.Uuid
+  farmId          String       @db.Uuid
+  code            String
+  name            String
+  startDate       DateTime     @db.Date
+  expectedEndDate DateTime     @db.Date
+  actualEndDate   DateTime?    @db.Date
+  status          SeasonStatus @default(PLANNED)
+  createdAt       DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  farm            Farm         @relation(fields: [organizationId, farmId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
+  plantings       Planting[]
+
+  @@unique([organizationId, farmId, id])
+  @@unique([organizationId, farmId, code])
+  @@index([organizationId, farmId, status])
+}
+
+model Planting {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String         @db.Uuid
+  farmId           String         @db.Uuid
+  seasonId         String         @db.Uuid
+  fieldId          String         @db.Uuid
+  cropId           String         @db.Uuid
+  variety          String?
+  plannedAreaHa    Decimal        @db.Decimal(18, 6)
+  actualAreaHa     Decimal?       @db.Decimal(18, 6)
+  plannedStartDate DateTime       @db.Date
+  expectedEndDate  DateTime?      @db.Date
+  actualStartDate  DateTime?      @db.Date
+  actualEndDate    DateTime?      @db.Date
+  spacingMeters    Decimal?       @db.Decimal(18, 6)
+  populationPerHa  Decimal?       @db.Decimal(20, 6)
+  notes            String?
+  status           PlantingStatus @default(PLANNED)
+  createdAt        DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  field            Field          @relation(fields: [organizationId, farmId, fieldId], references: [organizationId, farmId, id], onDelete: Restrict, onUpdate: Restrict)
+  season           Season         @relation(fields: [organizationId, farmId, seasonId], references: [organizationId, farmId, id], onDelete: Restrict, onUpdate: Restrict)
+  crop             Crop           @relation(fields: [cropId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([organizationId, farmId, fieldId, status])
+  @@index([organizationId, farmId, seasonId, status])
+  @@index([cropId])
 }

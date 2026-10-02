@@ -1,8 +1,9 @@
 ﻿# AgroTrack
 
-Monorepo npm workspaces — Sprint 1, Tarefa 02. A fundação contém frontend,
+Monorepo npm workspaces — Sprint 1, Tarefa 03. A fundação contém frontend,
 API REST, PostgreSQL/PostGIS e o núcleo físico de identidade, organizações,
-papéis, fazendas e convites. Ainda não há autenticação ou endpoints de negócio.
+papéis, fazendas e convites, além de talhões, culturas, safras e plantios com
+fundação PostGIS. Ainda não há autenticação ou endpoints de negócio.
 
 ## Estrutura
 
@@ -10,9 +11,9 @@ papéis, fazendas e convites. Ainda não há autenticação ou endpoints de neg�
 apps/
   web/                         React + TypeScript + Vite
   api/
-    prisma/schema.prisma       Dez modelos do núcleo multi-tenant
+    prisma/schema.prisma       Núcleo multi-tenant e quatro modelos agrícolas
     prisma/migrations/         Migrations SQL versionadas
-    prisma/seed.mjs            Catálogo global de permissões, sem dados demo
+    prisma/seed.mjs            Permissões e culturas globais, sem dados demo
     prisma.config.ts           Configuração do CLI Prisma
     src/config/                Leitura e validação do ambiente
     src/prisma/                PrismaModule e PrismaService
@@ -168,11 +169,12 @@ npm run db:up
 ## Prisma e NestJS
 
 O schema está em `apps/api/prisma/schema.prisma`. O [modelo físico da Sprint 1](docs/architecture/physical-model-sprint1.md)
-documenta as dez tabelas, FKs compostas, checks SQL e limites de enforcement.
+documenta as tabelas, FKs compostas, PostGIS, checks SQL e limites de enforcement.
 Use `npm run db:migrate` para aplicar migrations versionadas e `npm run db:migrations`
 para consultar o estado. Não substitua migrations por `db push`. O seed é explícito
-e idempotente: `npm run db:seed` prepara somente Permission. Não cria organizações,
-usuários ou fazendas. A imagem também cria objetos internos da extensão PostGIS.
+e idempotente: `npm run db:seed` prepara Permission e oito Crop globais. Não cria
+organizações, usuários, fazendas ou plantios. A imagem também cria objetos internos
+da extensão PostGIS. A nova migration garante a extensão em bancos novos/shadow.
 
 O Prisma 7 utiliza `prisma.config.ts` para a URL e `@prisma/adapter-pg` como
 driver. O NestJS injeta um único `PrismaService` exportado pelo `PrismaModule`.
@@ -201,8 +203,8 @@ npm run db:check
 ```
 
 `test:api` cobre configuração, health e constraints reais no PostgreSQL migrado.
-Cada cenário de modelagem usa transação revertida, inclusive quando passa; não
-deixa usuários/fazendas demo e não usa truncate/reset. Execute somente no banco
+Os cenários comuns usam rollback; os testes concorrentes confirmam fixtures
+exclusivas e removem seus IDs em finally. Não usam truncate/reset. Execute somente no banco
 local de desenvolvimento. `db:check` valida a infraestrutura real. Os artefatos de build ficam em
 `apps/web/dist` e `apps/api/dist`. Para iniciar o build da API:
 
@@ -221,7 +223,7 @@ use `docker compose config --quiet`.
 O banco é exclusivo do desenvolvimento local, com acesso publicado somente em
 loopback; seu usuário inicial é administrativo e não deve ser reutilizado como
 usuário da aplicação em produção. Autenticação, enforcement de autorização,
-RLS, entidades agrícolas e configuração de produção permanecem fora desta
+RLS, demais entidades agrícolas e configuração de produção permanecem fora desta
 entrega. O frontend mantém a página mínima AgroTrack e a stack da Tarefa 01.
 
 O `package.json` raiz contém overrides limitados ao Prisma 7.10.0 para

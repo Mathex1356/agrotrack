@@ -186,3 +186,172 @@ preexistentes. Erros são reportados por códigos, sem parâmetros sensíveis.
 Fora de escopo: autenticação, autorização executável, endpoints de negócio,
 frontend, RLS, auditoria física e demais entidades agrícolas/geoespaciais.
 Nenhuma dependência nova é necessária.
+
+## Complemento — Tarefa 03: núcleo agrícola e geoespacial
+
+A migration `20261002190000_agricultural_core` acrescenta somente Field, Crop,
+Season e Planting. A migration `20261002180000_access_core` permanece intacta.
+As seções anteriores descrevem a entrega da Tarefa 02; os catálogos e testes
+agora incluem também o complemento abaixo. D1–D8 não foram modificadas.
+
+### Modelos, precisão e escopo
+
+| Modelo | Representação física |
+| --- | --- |
+| Field | UUID, organização/fazenda, code/name, areaHa NUMERIC(18,6), soilType/description/notes opcionais, ACTIVE/INACTIVE, boundary opcional, geometryRevision e timestamps. |
+| Crop | UUID, scope GLOBAL/ORGANIZATION, organizationId opcional, code/name, ACTIVE/INACTIVE e timestamps. Não representa produto de estoque. |
+| Season | UUID, organização/fazenda, code/name, startDate/expectedEndDate, actualEndDate opcional, PLANNED/IN_PROGRESS/FINISHED/CANCELLED e timestamps. |
+| Planting | UUID, organização/fazenda, Field/Season/Crop, variedade opcional, plannedAreaHa/actualAreaHa NUMERIC(18,6), datas previstas/reais, spacingMeters NUMERIC(18,6), populationPerHa NUMERIC(20,6), notes, estado e timestamps. |
+
+Enums adicionados: FieldStatus, CropScope, CropStatus, SeasonStatus e PlantingStatus.
+Datas agronômicas são DATE, sem hora; timestamps cadastrais continuam timestamptz(3).
+UUIDs continuam v4 gerados no PostgreSQL. Códigos são upper/trim, não vazios e
+não são liberados pela inativação. Nomes não são globalmente únicos.
+
+Field não tem cropId: um território pode receber vários Planting simultâneos,
+inclusive da mesma Season. Cada Planting associa uma cultura, área e intervalo;
+não há UNIQUE(fieldId,seasonId) nem exclusão temporal. Safras sobrepostas são válidas.
+Crop é identidade agronômica; Product será o insumo/material com unidades e estoque.
+
+Unit não é necessário para estes quatro modelos. suggestedHarvestUnitCode,
+plannedSeedUnit **e sua quantidade associada plannedSeedQuantity** ficam para a
+etapa de unidades; não há texto livre de unidade nem quantidade sem dimensão.
+areaSource/areaQuality também não foram antecipados: a área oficial nesta fase é
+sempre declarada/validada, e não existe vocabulário aprovado de qualidade/origem
+de levantamento. Implementá-los junto ao fluxo de validação territorial.
+
+### FKs, checks e índices
+
+- Field e Season → Farm por (organizationId,farmId).
+- Field e Season expõem UNIQUE(organizationId,farmId,id).
+- Planting → Field por (organizationId,farmId,fieldId), e → Season por
+  (organizationId,farmId,seasonId). Impede combinar tenants ou fazendas diferentes.
+- Crop privado → Organization; Planting → Crop por ID mais constraint trigger.
+- Todas as FKs usam DELETE/UPDATE RESTRICT, sem cascatas. Inativar não apaga filhos.
+- Field.areaHa e áreas de Planting são positivas e diferentes de NaN; spacingMeters
+  e populationPerHa, quando presentes, também. Escala/magnitude são limitadas por
+  NUMERIC. A entrada futura deve rejeitar precisão excedente antes do arredondamento.
+- Season: expectedEndDate e actualEndDate não anteriores a startDate. Planting:
+  expectedEndDate >= plannedStartDate; actualEndDate exige actualStartDate e não
+  pode antecedê-la. Não limitar execução às datas previstas nem impedir sobreposição.
+  Transições de status e pré-condições de iniciar/finalizar ainda são de fluxo futuro.
+- Field/Season: códigos únicos por organização/fazenda; índices
+  (organizationId,farmId,status). Planting: índices
+  (organizationId,farmId,fieldId,status), (organizationId,farmId,seasonId,status)
+  e cropId. Servem a listagens e checagens de referências; consultas temporais
+  futuras podem usar o prefixo por Field sem filtrar apenas o status atual.
+- Crop: índice (scope,organizationId,status), UNIQUE(organizationId,code) para
+  privados e índice único parcial code WHERE scope='GLOBAL' para globais.
+  A chave privada não resolve NULLs globais sozinha. Field.boundary recebe GiST.
+
+### Crop global ou da mesma organização
+
+CHECK exige GLOBAL com organizationId NULL e ORGANIZATION com organizationId
+presente. O constraint trigger imediato, não diferível,
+`Planting_crop_scope_check` roda em INSERT/UPDATE e só permite Crop global ou da
+organização declarada no Planting. IDs incompatíveis produzem erro sem detalhes
+de outros tenants. A FK simples mantém existência e RESTRICT.
+
+`Crop_protect_scope` bloqueia mudança de scope/organizationId desde a criação,
+conforme seção 5.2 do modelo conceitual. Assim uma cultura não pode ser movida
+depois da validação de um vínculo, inclusive durante concorrência. Renomear ou
+inativar é permitido, preservando referências. Impedir novos usos de culturas
+inativas e autorizar manutenção global somente pela plataforma são validações
+do futuro fluxo; o trigger não implementa autorização de usuário nem RLS.
+
+### Field.boundary e área geográfica
+
+No Prisma 7.10.0, `Unsupported("geometry(MultiPolygon,4326)")?` mantém a coluna
+no modelo/migration, sem expô-la como campo CRUD comum no Client. Nos testes,
+escrita/leitura usam SQL parametrizado; leituras convertem a geometria em dados
+suportados. Não foi criado adaptador ou endpoint espacial de negócio.
+[Referência Prisma: tipos não suportados](https://docs.prisma.io/docs/orm/reference/prisma-schema-reference).
+
+A migration garante PostGIS com CREATE EXTENSION IF NOT EXISTS antes da coluna,
+inclusive em banco novo/shadow com os binários da extensão disponíveis. O usuário
+de migration precisa desse privilégio; não deve ser o usuário runtime de produção.
+O typmod limita armazenamento a MultiPolygon 2D/SRID 4326. CHECK adicional rejeita
+vazio, invalidez topológica e coordenadas fora de longitude [-180,180] e latitude
+[-90,90]. ST_IsValid(boundary,0) evita NOTICE com detalhes da geometria inválida.
+Não se usa ST_MakeValid nem se armazena GeoJSON paralelo.
+[Referência PostGIS: validade](https://postgis.net/docs/ST_IsValid.html).
+
+Comportamentos reais do PostGIS 3.6 cobertos por testes: Polygon é promovido a
+MultiPolygon sem mudar a forma (ST_Equals); Point e geometria 3D são rejeitados.
+SRID conhecido diferente, como 3857, é rejeitado. O typmod atribui 4326 quando o
+SRID de entrada é 0: isso **não transforma coordenadas**, apenas as interpreta
+como WGS84. SQL direto deve fornecer longitude/latitude WGS84; o futuro adaptador
+deve exigir referência conhecida e transformar importações antes do armazenamento,
+sem aceitar coordenadas projetadas apenas porque estão nos limites numéricos.
+
+geometryRevision é mantido pelo banco: 0 na criação sem geometria, 1 com geometria;
+incrementa ao alterar os bytes EWKB, inclusive remover boundary. Regravar o mesmo
+EWKB não incrementa; alterações manuais do contador são ignoradas. Mudança espacial
+também atualiza updatedAt. Revisão não é histórico: snapshots e auditoria futuros
+continuam necessários para preservar geometrias utilizadas por fatos confirmados.
+
+areaHa declarada continua oficial. Não existe calculatedAreaHa persistido. Derivar
+`ST_Area(boundary::geography) / 10000` quando houver geometria; o teste mede um
+retângulo conhecido e verifica hectares plausíveis sem modificar areaHa.
+[Referência PostGIS: área em geography](https://postgis.net/docs/ST_Area.html).
+Ausência de boundary representa “Talhão ainda não mapeado” na futura interface.
+A divergência `abs(calculada-declarada)/declarada*100 > 2` deverá sinalizar revisão;
+não há alertas agora nem substituição automática da capacidade.
+
+### Capacidade individual implementada; agregada adiada
+
+`Planting_individual_area_check` valida plannedAreaHa e actualAreaHa contra o
+Field referenciado, em INSERT ou mudança de áreas/escopo. Faz UPDATE sem mudança
+de valor em Field.areaHa e lê a capacidade via RETURNING. Essa escrita bloqueia
+a linha até o fim da transação e cria nova versão MVCC, sem mudar hectares,
+geometryRevision ou updatedAt. É deliberada: somente SELECT FOR UPDATE poderia
+deixar uma revisão de capacidade em Repeatable Read com snapshot antigo sem
+enxergar um Planting recém-confirmado. A mudança de versão força conflito de
+serialização nesses casos. Requer permissão UPDATE na coluna para o futuro
+escritor e produz escrita adicional; não é um contador de ocupação.
+[Referência PostgreSQL: isolamento](https://www.postgresql.org/docs/18/transaction-iso.html).
+
+`Field_individual_capacity_check` rejeita redução que deixe qualquer área
+individual planejada/real já registrada acima da nova capacidade. Não reescreve
+o histórico. Validação inclui plantios encerrados; uma futura revisão territorial
+com fatos históricos exigirá o fluxo de versões/correções, não truncamento de áreas.
+Quatro testes concorrentes confirmam ambas as ordens (plantar/reduzir primeiro)
+em Read Committed e Repeatable Read: observam o bloqueio via pg_blocking_pids,
+confirmam o primeiro escritor e exigem rejeição do conflitante. Transações futuras
+devem tratar serialização/deadlocks repetindo a operação inteira, com idempotência.
+
+**A soma de ocupações simultâneas NÃO está implementada.** Um teste explicita que
+60+50 ha em Field de 100 ha ainda é estruturalmente gravável, embora proibido em
+execução por D4. Não liberar o fluxo de execução antes do enforcement agregado.
+O protocolo futuro aprovado deve bloquear Field, reler todos os intervalos reais
+sobrepostos e calcular a soma nos pontos de início/fim de [actualStart,actualEnd).
+Fim real ausente continua ocupando; previsão vencida não libera terra; históricos
+finalizados/cancelados com execução continuam contando nos seus intervalos.
+PLANNED não reserva rigidamente. Alterar datas, áreas, encerramento ou capacidade
+deve usar o mesmo protocolo; se necessário, bloquear Farm antes de Field, em ordem
+estável. Não basta somar IN_PROGRESS nem proibir toda sobreposição.
+
+Também ficam para fluxo transacional: soma de talhões ativos <= total da Farm,
+interseção entre talhões, revisão territorial/auditoria e proteção semântica de
+reparenting. A inativação preserva linhas, mas não é autorização para apagar
+execuções. Não há subareaGeometry de Planting, consórcio ou mapa frontend.
+
+### Seed e testes
+
+`prisma/crops.mjs` acrescenta oito culturas globais: SOYBEAN, CORN, COTTON, BEAN,
+WHEAT, COFFEE, SORGHUM e SUGARCANE. INSERT ON CONFLICT usa o índice parcial:
+reexecução/concorrência não duplica culturas; nomes conhecidos são reconciliados
+sem reativar culturas deliberadamente inativadas. Não cria culturas privadas.
+`prisma/seed.mjs` executa seedPermissions e seedGlobalCrops na mesma transação,
+preservando o comportamento do catálogo Permission. Scripts existentes bastam.
+
+`agriculture.integration.test.mjs` exercita FKs, unicidades, checks, geometria,
+revisões, seeds, capacidade individual e seus conflitos concorrentes. Cenários
+comuns fazem rollback. Os quatro concorrentes precisam de fixtures confirmadas;
+criam IDs exclusivos e removem somente esses IDs em finally, sem truncate/reset.
+Uma interrupção forçada do processo pode deixar fixtures identificadas como teste;
+execute somente no banco local. Os testes anteriores permanecem inalterados.
+
+Nenhuma dependência, entidade extra, autenticação, endpoint ou alteração frontend.
+Nenhuma nova decisão de produto foi necessária; permanecem as limitações explícitas
+de enforcement e fluxos futuros descritas acima.
