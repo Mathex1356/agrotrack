@@ -1,0 +1,31 @@
+{
+  "name": "agrotrack",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=24.15.0 <25",
+    "npm": ">=11"
+  },
+  "scripts": {
+    "dev:web": "npm run dev --workspace=@agrotrack/web",
+    "dev:api": "npm run dev --workspace=@agrotrack/api",
+    "build": "npm run build --workspaces --if-present",
+    "build:web": "npm run build --workspace=@agrotrack/web",
+    "build:api": "npm run build --workspace=@agrotrack/api",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.19.1",
+    "eslint": "^10.11.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.13.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.0"
+  }
+}
