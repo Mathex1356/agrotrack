@@ -3,7 +3,10 @@
 Monorepo npm workspaces — Sprint 1, Tarefa 03. A fundação contém frontend,
 API REST, PostgreSQL/PostGIS e o núcleo físico de identidade, organizações,
 papéis, fazendas e convites, além de talhões, culturas, safras e plantios com
-fundação PostGIS. Ainda não há autenticação ou endpoints de negócio.
+fundação PostGIS. A API agora possui autenticação global por senha/sessão e contexto
+organizacional validado; ainda não há endpoints de negócio agrícola ou tela de login.
+Consulte [autenticação e contexto](docs/architecture/auth-foundation.md) para contratos,
+segurança, configurações e limitações.
 
 ## Estrutura
 
@@ -58,6 +61,12 @@ estão alinhados e fixados em 7.10.0; consulte o lockfile para as demais versõe
    do ambiente local e atualize `DATABASE_URL` com a mesma senha, usuário,
    database e porta. Não use credenciais de produção. Não sobrescreva um `.env`
    já configurado. O placeholder do exemplo é rejeitado pela API.
+
+   Configure também `NODE_ENV=development`, dois segredos aleatórios independentes
+   `AUTH_JWT_SECRET` e `AUTH_RATE_LIMIT_SECRET` (32 bytes em base64url) e
+   `AUTH_ALLOWED_ORIGINS` com as origens exatas do frontend. Consulte `.env.example`.
+   Não existe usuário/senha demo nem cadastro público nesta etapa. Use o mesmo
+   hostname no frontend/API para cookies SameSite (portas diferentes são permitidas).
 
    | Variável | Uso |
    | --- | --- |
@@ -222,9 +231,10 @@ use `docker compose config --quiet`.
 
 O banco é exclusivo do desenvolvimento local, com acesso publicado somente em
 loopback; seu usuário inicial é administrativo e não deve ser reutilizado como
-usuário da aplicação em produção. Autenticação, enforcement de autorização,
-RLS, demais entidades agrícolas e configuração de produção permanecem fora desta
-entrega. O frontend mantém a página mínima AgroTrack e a stack da Tarefa 01.
+usuário da aplicação em produção. A fundação de autenticação e contexto validado
+está implementada. Autorização completa dos domínios, RLS, demais entidades
+agrícolas e implantação de produção permanecem pendentes. O frontend mantém a
+página mínima AgroTrack e a stack da Tarefa 01.
 
 O `package.json` raiz contém overrides limitados ao Prisma 7.10.0 para
 `deepmerge-ts@8.0.2` e `mysql2@3.24.5`, corrigindo alertas nas versões transitivas

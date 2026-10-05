@@ -60,14 +60,57 @@ enum FarmMembershipStatus {
 }
 
 model User {
-  id              String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  displayName     String
-  email           String
-  normalizedEmail String                   @unique
-  status          UserStatus               @default(ACTIVE)
-  createdAt       DateTime                 @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
-  memberships     OrganizationMembership[]
+  id                 String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  displayName        String
+  email              String
+  normalizedEmail    String                   @unique
+  status             UserStatus               @default(ACTIVE)
+  createdAt          DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
+  memberships        OrganizationMembership[]
+  passwordCredential PasswordCredential?
+  authSessions       AuthSession[]
+}
+
+model PasswordCredential {
+  userId       String   @id @db.Uuid
+  passwordHash String
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+}
+
+model AuthSession {
+  id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String         @db.Uuid
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  expiresAt     DateTime       @db.Timestamptz(3)
+  revokedAt     DateTime?      @db.Timestamptz(3)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  refreshTokens RefreshToken[]
+
+  @@index([userId, expiresAt])
+}
+
+model RefreshToken {
+  id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId   String      @db.Uuid
+  tokenDigest String      @unique @db.Char(64)
+  createdAt   DateTime    @default(now()) @db.Timestamptz(3)
+  expiresAt   DateTime    @db.Timestamptz(3)
+  consumedAt  DateTime?   @db.Timestamptz(3)
+  session     AuthSession @relation(fields: [sessionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([sessionId])
+}
+
+model AuthRateLimit {
+  key             String   @id @db.Char(64)
+  windowStartedAt DateTime @db.Timestamptz(3)
+  expiresAt       DateTime @db.Timestamptz(3)
+  attempts        Int
+
+  @@index([expiresAt])
 }
 
 model Organization {

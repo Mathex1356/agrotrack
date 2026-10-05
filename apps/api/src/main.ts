@@ -1,6 +1,8 @@
 import 'reflect-metadata';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
+import { configureHttp } from './http-security.js';
 import { AppModule } from './app.module.js';
 import { ConfigurationError, getDatabaseUrl, getPort, loadEnvironment } from './config/environment.js';
 
@@ -9,7 +11,8 @@ async function bootstrap(): Promise<void> {
   getDatabaseUrl();
   const port = getPort();
 
-  const app = await NestFactory.create(AppModule, { abortOnError: false });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { abortOnError: false, bodyParser: false });
+  configureHttp(app);
   app.enableShutdownHooks();
   try {
     await app.listen(port, '127.0.0.1');
