@@ -1,5 +1,8 @@
 # Fundação de autenticação e contexto
 
+A composição de Permission e alcance por fazenda está documentada na
+[fundação de autorização](./authorization-foundation.md).
+
 Implementa D-AUTH-01 e D-AUTH-02 aprovadas. Identidade é global; organização nunca
 é atributo autoritativo do JWT ou da sessão. Nenhuma decisão D1–D8 é alterada.
 
