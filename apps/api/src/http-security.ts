@@ -28,7 +28,7 @@ export function configureHttp(app: NestExpressApplication): void {
     response.setHeader('X-Content-Type-Options', 'nosniff');
     next();
   });
-  app.enableCors({ origin: config.origins, credentials: true, methods: ['GET', 'POST', 'OPTIONS'],
+  app.enableCors({ origin: config.origins, credentials: true, methods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Authorization', 'Content-Type', 'X-AgroTrack-CSRF', 'X-Organization-Membership-Id'] });
   app.useBodyParser('json', { limit: '8kb' });
   app.useGlobalFilters(new SafeExceptionFilter());
