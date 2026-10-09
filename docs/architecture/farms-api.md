@@ -87,10 +87,11 @@ campos diferentes não sobrescrevem uns aos outros com snapshots antigos.
 Conflitos no mesmo campo seguem a última transação que obtiver o lock, sem ETag.
 
 Reduzir totalAreaHa abaixo da soma atual de Field ACTIVE recebe 409. A soma é lida
-sob lock da Farm, mas isto **não é enforcement global** de soma de talhões: futuros
-escritores de Field deverão seguir o mesmo protocolo Farm→Field ou uma proteção
-equivalente. A API não cria/edita Field, nem altera sua capacidade individual ou
-geometria. Não alegar proteção contra SQL externo que ignore o protocolo.
+sob lock da Farm. A [API de Fields](./fields-api.md) agora compartilha esse lock
+no protocolo Farm→Field para criação, reativação e alteração de área ativa.
+Isso serializa esses fluxos com redução da fazenda; não é enforcement global
+contra SQL externo ou escritores que ignorem o protocolo. A rota de Farm não
+altera área individual ou geometria de Field.
 
 Inativar Farm preserva Field, Season, Planting e FarmMembership; não remove filhos
 nem apaga fatos. Reactivação usa o mesmo PATCH autorizado. AuditLog físico ainda
