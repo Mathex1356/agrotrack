@@ -5,6 +5,8 @@ import { AuthModule } from './auth/auth.module.js';
 import { AuthorizationModule } from './authorization/authorization.module.js';
 import { FarmsModule } from './farms/farms.module.js';
 import { FieldsModule } from './fields/fields.module.js';
+import { CropsModule } from './crops/crops.module.js';
+import { SeasonsModule } from './seasons/seasons.module.js';
 
-@Module({ imports: [PrismaModule, AuthModule, AuthorizationModule, FarmsModule, FieldsModule], controllers: [HealthController] })
+@Module({ imports: [PrismaModule, AuthModule, AuthorizationModule, FarmsModule, FieldsModule, CropsModule, SeasonsModule], controllers: [HealthController] })
 export class AppModule {}

@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import { loadEnvironment } from '../dist/config/environment.js';
 import { PrismaService } from '../dist/prisma/prisma.service.js';
-import { permissions, seedPermissions, provisionSystemRoles } from '../prisma/permissions.mjs';
+import { seedPermissions, provisionSystemRoles } from '../prisma/permissions.mjs';
 
 let prisma;
 const rollback = new Error('Rollback test fixture');
@@ -73,7 +73,7 @@ test('valid ten-model graph, global user and repeatable permission/role provisio
   await provisionSystemRoles(tx, f.a.id);
   await provisionSystemRoles(tx, f.a.id);
   assert.equal(await tx.role.count({ where: { organizationId: f.a.id } }), 4);
-  assert.equal(await tx.rolePermission.count({ where: { roleId: f.ra.id } }), permissions.length);
+  assert.equal(await tx.rolePermission.count({ where: { roleId: f.ra.id } }), 0);
   const worker = await tx.role.findUniqueOrThrow({ where: { organizationId_systemCode: { organizationId: f.a.id, systemCode: 'WORKER' } }, include: { permissions: true } });
   assert.deepEqual(worker.permissions.map((p) => p.permissionCode).sort(), [
     'activities.execute_assigned', 'farms.read_assigned_work', 'harvest.record_assigned', 'inventory.consume_via_activity',

@@ -24,8 +24,8 @@ troca de Role e remoção de RolePermission, sem reemitir o access token.
 ## Catálogo e capacidade
 
 `authorization/permissions.ts` oferece PERMISSIONS e a união tipada PermissionCode
-para os mesmos 25 códigos de `prisma/permissions.mjs`; teste de paridade protege
-essa correspondência. Não foram criadas permissões adicionais. O seed continua
+para os mesmos 27 códigos de `prisma/permissions.mjs`; teste de paridade protege
+essa correspondência. A evolução aprovada de crops.read/crops.manage e a preservação de grants no provisionamento estão documentadas em [Crops e Seasons](crops-seasons-api.md). Roles existentes não têm concessões removidas restauradas pelo helper. O seed continua
 idempotente e preserva seu comportamento anterior: reconcilia inclusive status
 ACTIVE das capacidades conhecidas. Não usar reexecução de seed como manutenção
 rotineira durante uma desativação operacional de Permission.

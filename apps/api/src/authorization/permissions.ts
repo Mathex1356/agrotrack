@@ -9,6 +9,8 @@ export const PERMISSIONS = {
   FIELDS_MANAGE: 'fields.manage',
   SEASONS_MANAGE: 'seasons.manage',
   PLANTINGS_MANAGE: 'plantings.manage',
+  CROPS_READ: 'crops.read',
+  CROPS_MANAGE: 'crops.manage',
   ACTIVITIES_PLAN: 'activities.plan',
   ACTIVITIES_PLAN_TECHNICAL: 'activities.plan_technical',
   ACTIVITIES_EXECUTE: 'activities.execute',

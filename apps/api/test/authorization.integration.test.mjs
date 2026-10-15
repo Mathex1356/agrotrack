@@ -144,8 +144,8 @@ async function scenario(run) {
 const denied = operation => assert.rejects(operation, error => error?.getStatus?.() === 403);
 const unauthenticated = operation => assert.rejects(operation, error => error?.getStatus?.() === 401);
 
-test('authorization: typed catalogue matches all 25 seeded capabilities', () => {
-  assert.equal(Object.keys(PERMISSIONS).length, 25);
+test('authorization: typed catalogue matches all 27 seeded capabilities', () => {
+  assert.equal(Object.keys(PERMISSIONS).length, 27);
   assert.deepEqual(Object.values(PERMISSIONS).sort(), permissions.map(p => p.code).sort());
 });
 test('authorization: capability allows; missing, empty and unknown capabilities deny', () => scenario(async (_tx, f, service, request) => {

@@ -9,6 +9,8 @@ const definitions = [
   ['fields.manage', 'FARM', 'Gerenciar talhões no escopo técnico autorizado', ['MANAGER', 'AGRONOMIST']],
   ['seasons.manage', 'FARM', 'Gerenciar safras no escopo técnico autorizado', ['MANAGER', 'AGRONOMIST']],
   ['plantings.manage', 'FARM', 'Gerenciar plantios no escopo técnico autorizado', ['MANAGER', 'AGRONOMIST']],
+  ['crops.read', 'ORGANIZATION', 'Consultar culturas globais e da organização', ['MANAGER', 'AGRONOMIST']],
+  ['crops.manage', 'ORGANIZATION', 'Gerenciar culturas privadas da organização', []],
   ['activities.plan', 'FARM', 'Planejar e atribuir atividades operacionais', ['MANAGER']],
   ['activities.plan_technical', 'FARM', 'Planejar e atribuir atividades técnicas', ['AGRONOMIST']],
   ['activities.execute', 'FARM', 'Executar atividades operacionais', ['MANAGER']],
@@ -39,22 +41,32 @@ export const systemRolePermissions = Object.fromEntries(
 );
 
 export async function seedPermissions(tx) {
+  await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(7700317)`;
   for (const permission of permissions) {
-    await tx.permission.upsert({
-      where: { code: permission.code }, create: permission, update: permission,
-    });
+    const inserted = await tx.$queryRaw`INSERT INTO "Permission" ("code", "description", "scope", "status")
+      VALUES (${permission.code}, ${permission.description}, ${permission.scope}::"PermissionScope", 'ACTIVE')
+      ON CONFLICT ("code") DO NOTHING RETURNING "code"`;
+    await tx.permission.update({ where: { code: permission.code }, data: permission });
+    // First catalogue introduction is the marker; never repair removed grants on rerun.
+    if (inserted.length && ['crops.read', 'crops.manage'].includes(permission.code)) {
+      const systemCodes = Object.entries(systemRolePermissions).filter(([, codes]) => codes.includes(permission.code)).map(([code]) => code);
+      const roles = await tx.role.findMany({ where: { systemCode: { in: systemCodes } }, select: { id: true, organizationId: true } });
+      if (roles.length) await tx.rolePermission.createMany({ data: roles.map(role => ({ organizationId: role.organizationId,
+        roleId: role.id, permissionCode: permission.code })), skipDuplicates: true });
+    }
   }
 }
 
 // Future trusted provisioning must call this within its own transaction.
 // Does not create an organization, owner, user or territorial grant.
 export async function provisionSystemRoles(tx, organizationId) {
+  await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(7700317)`;
   await tx.organization.findUniqueOrThrow({ where: { id: organizationId } });
   for (const [systemCode, codes] of Object.entries(systemRolePermissions)) {
-    const role = await tx.role.upsert({
-      where: { organizationId_systemCode: { organizationId, systemCode } },
-      create: { organizationId, systemCode, name: systemCode }, update: {},
-    });
+    const [role] = await tx.$queryRaw`INSERT INTO "Role" ("organizationId", "systemCode", "name")
+      VALUES (${organizationId}::uuid, ${systemCode}::"SystemRoleCode", ${systemCode})
+      ON CONFLICT ("organizationId", "systemCode") DO NOTHING RETURNING "id"`;
+    if (!role) continue;
     await tx.rolePermission.createMany({
       data: codes.map((permissionCode) => ({ organizationId, roleId: role.id, permissionCode })),
       skipDuplicates: true,
