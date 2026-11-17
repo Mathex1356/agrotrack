@@ -246,7 +246,7 @@ test('fields: existing capacity drift does not block metadata-only updates',()=>
 test('fields: reduction preserves individual historical planting capacity and inactivation keeps history',()=>scenario(async(tx,f,request)=>{
   const season=await tx.season.create({data:{organizationId:f.aId,farmId:f.farm.id,code:'TEST',name:'Test',startDate:new Date('2026-01-01'),expectedEndDate:new Date('2026-12-31')}});
   const crop=await tx.crop.findFirst({where:{scope:'GLOBAL',code:'SOYBEAN'}});
-  await tx.planting.create({data:{organizationId:f.aId,farmId:f.farm.id,fieldId:f.field.id,seasonId:season.id,cropId:crop.id,plannedAreaHa:'15',plannedStartDate:new Date('2026-01-01'),status:'FINISHED'}});
+  await tx.planting.create({data:{organizationId:f.aId,farmId:f.farm.id,fieldId:f.field.id,seasonId:season.id,cropId:crop.id,plannedAreaHa:'15',plannedStartDate:new Date('2026-01-01'),status:'FINISHED',actualAreaHa:'15',actualStartDate:new Date('2026-01-01'),actualEndDate:new Date('2026-02-01')}});
   assert.equal((await patch(request,f,{areaHa:'10'})).status,409);
   assert.equal((await patch(request,f,{status:'INACTIVE',boundary:polygon()})).status,200);
   assert.equal(await tx.planting.count({where:{fieldId:f.field.id}}),1);
@@ -316,4 +316,14 @@ test('fields: concurrent same-field metadata/area and geometry patches preserve 
   const results=await race(f,[()=>patch(request,f,{name:'Concurrent',areaHa:'25'}),()=>patch(request,f,{boundary:polygon()})]);
   assert.deepEqual(results.map(r=>r.status),[200,200]);
   const final=await request(path(f.farm.id,f.field.id));assert.equal(final.body.name,'Concurrent');assert.equal(final.body.areaHa,'25');assert.equal(final.body.geometryRevision,1);assert.equal(final.body.mapped,true);
+}));
+
+
+test('fields: reduction rejects historical temporal peak even when individual plantings fit',()=>scenario(async(tx,f,request)=>{
+  const season=await tx.season.create({data:{organizationId:f.aId,farmId:f.farm.id,code:'PEAK',name:'Peak',startDate:new Date('2026-01-01'),expectedEndDate:new Date('2026-12-31')}});
+  const crop=await tx.crop.findFirstOrThrow({where:{scope:'GLOBAL',code:'SOYBEAN'}});
+  for(const area of ['12','8']) await tx.planting.create({data:{organizationId:f.aId,farmId:f.farm.id,fieldId:f.field.id,seasonId:season.id,cropId:crop.id,plannedAreaHa:area,actualAreaHa:area,plannedStartDate:new Date('2026-01-01'),actualStartDate:new Date('2026-01-01'),actualEndDate:new Date('2026-02-01'),status:'FINISHED'}});
+  assert.equal((await patch(request,f,{areaHa:'15'})).status,409);
+  assert.equal((await patch(request,f,{notes:'Preserved'})).status,200);
+  assert.equal((await tx.field.findUniqueOrThrow({where:{id:f.field.id}})).areaHa.toString(),'20');
 }));

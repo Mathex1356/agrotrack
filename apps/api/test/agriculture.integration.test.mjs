@@ -125,7 +125,7 @@ no('Planting actual end cannot precede actual start', check, (tx, f) => plant(tx
 no('Planting actual end requires actual start', check, (tx, f) => plant(tx, f, { actualEndDate: date('2026-12-01') }));
 for (const column of ['spacingMeters', 'populationPerHa']) no(`Planting rejects negative ${column}`, check, (tx, f) => plant(tx, f, { [column]: '-1' }));
 ok('PLANNED plantings do not reserve aggregate capacity', async (tx, f) => { await plant(tx, f); await plant(tx, f); });
-ok('documented limit: aggregate effective occupancy is not yet enforced', async (tx, f) => {
+no('aggregate effective occupancy rejects 60 plus 50 in a 100 hectare Field', check, async (tx, f) => {
   await plant(tx, f, { status: 'IN_PROGRESS', actualAreaHa: '60', actualStartDate: date('2026-10-01') });
   await plant(tx, f, { status: 'IN_PROGRESS', actualAreaHa: '50', actualStartDate: date('2026-10-01') });
 });

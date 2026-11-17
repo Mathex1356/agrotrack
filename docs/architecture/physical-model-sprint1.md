@@ -355,3 +355,39 @@ execute somente no banco local. Os testes anteriores permanecem inalterados.
 Nenhuma dependÃªncia, entidade extra, autenticaÃ§Ã£o, endpoint ou alteraÃ§Ã£o frontend.
 Nenhuma nova decisÃ£o de produto foi necessÃ¡ria; permanecem as limitaÃ§Ãµes explÃ­citas
 de enforcement e fluxos futuros descritas acima.
+
+## Evolução Sprint 2, Tarefa 04 — capacidade temporal implementada
+
+A migration `20261016120000_planting_temporal_capacity` substitui a limitação
+agregada descrita na seção histórica da Tarefa 03. Não altera schema.prisma,
+FKs, modelos, PostGIS ou migrations aplicadas.
+
+- Planting_lifecycle_check impõe PLANNED sem dados reais; IN_PROGRESS com
+  área/início e sem fim; FINISHED com os três; CANCELLED sem execução ou completo.
+- Planting_real_interval_check exige actualEndDate > actualStartDate; fim exclusivo,
+  primeira data livre, sem acréscimo automático de um dia.
+- planting_occupation_peak soma eventos de início/fim por data e obtém o máximo
+  acumulado em NUMERIC exato por organização/fazenda/Field. Fim nulo é aberto.
+- Planting_temporal_capacity_check e Field_temporal_capacity_check rejeitam
+  ocupação excedente e redução incompatível com o pico, inclusive histórico.
+- check_planting_individual_area mantém a escrita de versão MVCC de Field e a
+  estende a datas/status; impede limpar dados reais de uma execução existente.
+- Checks e preflight sob locks da migration recusam dados incompatíveis sem
+  corrigir, apagar ou normalizar fatos. BEFORE bloqueia/versiona; AFTER valida
+  resultado do comando sem duplicar OLD/NEW, inclusive comandos multilinha.
+
+FINISHED e CANCELLED executados contam no intervalo histórico. PLANNED não
+reserva agregado, mas sua área individual ainda deve caber no Field. Alterar
+actualAreaHa reinterpretaria todo o intervalo: correções operacionais auditadas,
+ocupação segmentada e execução parcial ficam fora da API de planejamento.
+Não há garantia de imutabilidade histórica completa contra usuário privilegiado.
+
+O banco garante capacidade para escritores SQL comuns; API continua responsável
+por autorização, estados dos pais e escopo. API bloqueia Farm ? Field ? Planting
+quando existente, relê autorização e bloqueia Season/Crop durante validação.
+Repeatable Read obsoleto aborta por serialização graças à nova versão do Field;
+Read Committed valida o estado confirmado. Deadlocks podem ocorrer entre escritores
+com ordens diferentes; repetir exige transação inteira e idempotência adequada.
+
+Contrato completo e limites: [plantings-api.md](plantings-api.md). Enforcement
+temporal não prova ausência de sobreposição geométrica nem implementa consórcio.

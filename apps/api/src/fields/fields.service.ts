@@ -28,7 +28,8 @@ export class FieldsService {
   private async write<T>(operation: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
     try { return await this.prisma.$transaction(operation); }
     catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && ['P2002', 'P2034'].includes(error.code)) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && (['P2002', 'P2034'].includes(error.code)
+        || (error.code === 'P2010' && ['40001', '40P01'].includes(String(error.meta?.code))))) {
         throw new ConflictException('Conflito ao gravar talhao.');
       }
       throw error;
@@ -82,6 +83,10 @@ export class FieldsService {
       if (area.lt(current.areaHa) && await tx.planting.findFirst({ where: { ...scope, fieldId: id,
         OR: [{ plannedAreaHa: { gt: area } }, { actualAreaHa: { gt: area } }] }, select: { id: true } })) {
         throw new ConflictException('Area incompatível com plantios registrados.');
+      }
+      if (area.lt(current.areaHa)) {
+        const [capacity] = await tx.$queryRaw<{ peak: Prisma.Decimal }[]>`SELECT planting_occupation_peak(${scope.organizationId}::uuid, ${farmId}::uuid, ${id}::uuid) AS peak`;
+        if (capacity.peak.gt(area)) throw new ConflictException('Area incompatível com ocupacao temporal registrada.');
       }
       const { boundary, ...data } = input;
       if (Object.keys(data).length) await tx.field.update({ where: { organizationId_farmId_id: { ...scope, id } }, data });

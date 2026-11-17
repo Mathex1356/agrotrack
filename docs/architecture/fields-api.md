@@ -139,3 +139,14 @@ e observa a cadeia `pg_blocking_pids` antes de liberar os escritores. Cobre
 capacidade entre Fields, Field vs reduÃ§Ã£o Farm e PATCHs no mesmo Field; tambÃ©m
 IDOR, memberships, permissÃµes, GeoJSON/precisÃ£o, revisÃ£o, rollback, projeÃ§Ã£o,
 histÃ³rico e validaÃ§Ã£o. Os 151 testes anteriores continuam obrigatÃ³rios.
+
+## Evolução Sprint 2, Tarefa 04 — D4
+
+A redução de areaHa também verifica o pico temporal histórico via função
+planting_occupation_peak, com NUMERIC exato, e retorna 409 quando incompatível.
+O novo trigger de PostgreSQL protege essa regra inclusive em SQL direto; preserva
+as validações individuais e o protocolo Farm ? Field. Esta proteção é de ocupação
+de Planting; não amplia a garantia da soma de Fields contra Farm para SQL externo.
+Ver [API de plantios](plantings-api.md) para intervalos semiabertos, histórico,
+matriz de estados e concorrência. As limitações temporais descritas na entrega
+original acima foram superadas por esta migration; geometria permanece inalterada.
